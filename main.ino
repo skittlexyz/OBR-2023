@@ -2,6 +2,7 @@
 
 /* Libraries section */
 #include <U8g2lib.h>
+#include "Adafruit_TCS34725.h"
 #include <Wire.h>
 
 /* General configurations section */
@@ -11,7 +12,8 @@ const int velocity = 5;
 /* Objects declaration*/
 // OLED 128x64
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C display(U8G2_R0, /* reset=*/U8X8_PIN_NONE);
-
+Adafruit_TCS34725 leftColor = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_50MS, TCS34725_GAIN_1X);
+Adafruit_TCS34725 rightColor = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_50MS, TCS34725_GAIN_1X);
 
 /* Pin declaration section */
 // IR Sensor pins
@@ -20,8 +22,10 @@ uint8_t irSensorPins[] = {0};
 uint8_t stepperPins[5] = {2,5,3,6,8};
 
 /* Function declaration section */
-// IR Sensor Reader receives the sensor pin
-int irSensorRead(int pin);
+// IR Sensor Reader receives the mode (0: Digital, 1: Analog) and the sensor pin
+int irSensorRead(int mode, int pin);
+// Color Sensor Reader receives the side to be read (0: Left, 1: Right) and the color to be read (0: Red, 1: Green, 2: Blue, 3: Clarity)
+int colorSensorRead(int side, int color);
 // Stepper Controller receiver if the movement will be in a cross axis, the delay between the steps, the step quantity, the direction (0, 1, 2, 3) if the cross is true and the angle if it isn't
 bool stepperControl(bool cross, int velocity, int steps, int direction, int angle);
 // Servo Controller receives which servo to control and the movement method
@@ -36,12 +40,15 @@ bool tryFunction(bool current, String name, String error);
 bool pinsSetup();
 // OLED 128x64 setup
 bool oledSetup();
+// TCS34725 setup
+bool colorSetup();
 
 /* Main code section */
 void setup() {
   Serial.begin(115200);
-  tryFunction(pinsSetup(), "pinsSetup()", "error");
-  tryFunction(oledSetup(), "oledSetup()", "error");
+  tryFunction(pinsSetup(), "pinsSetup()", "Pins setup Error");
+  tryFunction(oledSetup(), "oledSetup()", "OLED 128x64 Malfunction");
+  tryFunction(colorSetup(), "colorSetup()", "TCS34725 Malfunction")
   infoPrint();
   displayControl(0,"",0,0);
   displayControl(4,"",0,2000);
@@ -54,8 +61,51 @@ void loop() {
 }
 
 /* Functions section */
-int irSensorRead(int pin) {
-  return 0;
+int irSensorRead(int mode, int pin) {
+  if (mode == 0) {
+    return digitalRead(pin);
+  } else if (mode == 1) (
+    return analogRead(pin);
+  )
+}
+int colorSensorRead(int side, int color) {
+  uint16_t r, g, b, c;
+  switch (side) {
+  case 0:
+    leftColor.getRawData(&r, &g, &b, &c);
+    switch (color) {
+    case 0:
+      return r;
+      break;
+    case 1:
+      return g;
+      break;
+    case 2:
+      return b;
+      break;
+    case 3:
+      return c;
+      break;
+    }
+    break;
+  case 1:
+    rightColor.getRawData(&r, &g, &b, &c);
+    switch (color) {
+    case 0:
+      return r;
+      break;
+    case 1:
+      return g;
+      break;
+    case 2:
+      return b;
+      break;
+    case 3:
+      return c;
+      break;
+    }
+    break;
+  }
 }
 bool stepperControl(bool cross, int velocity, int steps, int direction, int angle) {
   if (cross) {
@@ -174,7 +224,7 @@ bool displayControl(int mode, String text, int line, int delayTime) {
 }
 bool tryFunction(bool current, String name, String error) {
   while (!current) {
-    Serial.println(name + " " + error + "!");
+    Serial.println(name + " - " + error + "!");
     while (true) {}
   }
   return true;
@@ -193,4 +243,11 @@ bool oledSetup() {
   display.begin();
   display.clearBuffer();
   return true;
+}
+bool colorSetup() {
+  if (leftColor.begin() && rightColor.begin()) {
+    return true;
+  } else {
+    return false;
+  }
 }

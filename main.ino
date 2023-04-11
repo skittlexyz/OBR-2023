@@ -2,24 +2,27 @@
 
 /* Libraries section */
 #include <U8g2lib.h>
-#include "Adafruit_TCS34725.h"
+#include "Adafruit_TCS34725softi2c.h"
 #include <Wire.h>
 
 /* General configurations section */
 // Delay between each stepper step
-const int velocity = 5;
-
-/* Objects declaration*/
-// OLED 128x64
-U8G2_SSD1306_128X64_NONAME_F_HW_I2C display(U8G2_R0, /* reset=*/U8X8_PIN_NONE);
-Adafruit_TCS34725 leftColor = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_50MS, TCS34725_GAIN_1X);
-Adafruit_TCS34725 rightColor = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_50MS, TCS34725_GAIN_1X);
+#define stepperVelocity 1
+#define colorVelocity TCS34725_INTEGRATIONTIME_50MS
 
 /* Pin declaration section */
 // IR Sensor pins
 uint8_t irSensorPins[] = {0};
 // Grouped Stepper Motor pins {step pin, direction pin}, enable pin
 uint8_t stepperPins[5] = {2,5,3,6,8};
+// TCS34725 Pins {sda, scl, sda, scl}
+uint8_t colorPins[4] = {50, 51, 52, 53};
+
+/* Objects declaration*/
+// OLED 128x64
+U8G2_SSD1306_128X64_NONAME_F_HW_I2C display(U8G2_R0, /* reset=*/U8X8_PIN_NONE);
+Adafruit_TCS34725softi2c leftColor = Adafruit_TCS34725softi2c(colorVelocity, TCS34725_GAIN_1X, colorPins[0], colorPins[1]);
+Adafruit_TCS34725softi2c rightColor = Adafruit_TCS34725softi2c(colorVelocity, TCS34725_GAIN_1X, colorPins[2], colorPins[3]);
 
 /* Function declaration section */
 // IR Sensor Reader receives the mode (0: Digital, 1: Analog) and the sensor pin
@@ -48,25 +51,32 @@ void setup() {
   Serial.begin(115200);
   tryFunction(pinsSetup(), "pinsSetup()", "Pins setup Error");
   tryFunction(oledSetup(), "oledSetup()", "OLED 128x64 Malfunction");
-  tryFunction(colorSetup(), "colorSetup()", "TCS34725 Malfunction")
+  tryFunction(colorSetup(), "colorSetup()", "TCS34725 Malfunction");
   infoPrint();
   displayControl(0,"",0,0);
   displayControl(4,"",0,2000);
 }
 void loop() {
-  stepperControl(true, velocity, 500, 0, 0);
-  stepperControl(true, velocity, 500, 1, 0);
-  stepperControl(true, velocity, 500, 2, 0);
-  stepperControl(true, velocity, 500, 3, 0);
+  Serial.print("R1: "); Serial.print(colorSensorRead(0, 0));
+  Serial.print(" G1: "); Serial.print(colorSensorRead(0, 1));
+  Serial.print(" B1: "); Serial.print(colorSensorRead(0, 2));
+  Serial.print("\nR2: "); Serial.print(colorSensorRead(1, 0));
+  Serial.print(" G2: "); Serial.print(colorSensorRead(1, 1));
+  Serial.print(" B2: "); Serial.print(colorSensorRead(1, 2));
+  Serial.print("\n\n");
+  stepperControl(true, stepperVelocity, 50, 0, 0);
+  stepperControl(true, stepperVelocity, 50, 1, 0);
+  stepperControl(true, stepperVelocity, 50, 2, 0);
+  stepperControl(true, stepperVelocity, 50, 3, 0);
 }
 
 /* Functions section */
 int irSensorRead(int mode, int pin) {
   if (mode == 0) {
     return digitalRead(pin);
-  } else if (mode == 1) (
+  } else if (mode == 1) {
     return analogRead(pin);
-  )
+  }
 }
 int colorSensorRead(int side, int color) {
   uint16_t r, g, b, c;
@@ -179,7 +189,7 @@ void infoPrint() {
   Serial.print(stepperPins[sizeof(stepperPins) - 1]);
   Serial.print("\n└ Constantes:\n");
   Serial.print("  └ Velocidade: ");
-  Serial.print(velocity);
+  Serial.print(stepperVelocity, DEC);
   Serial.println("\n");
 }
 bool displayControl(int mode, String text, int line, int delayTime) {
@@ -191,7 +201,7 @@ bool displayControl(int mode, String text, int line, int delayTime) {
     display.drawStr(0, 24, "- Constantes:");
     display.drawStr(0, 36, "  - Velocidade: ");
     display.setCursor(78, 36);
-    display.print(velocity);
+    display.print(stepperVelocity);
     display.sendBuffer();
     delay(delayTime);
     break;

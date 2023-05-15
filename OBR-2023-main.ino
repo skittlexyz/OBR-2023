@@ -13,7 +13,7 @@
 
 /* Pin declaration section */
 // IR Sensor pins
-uint8_t irSensorPins[] = {0};
+uint8_t irSensorPins[8] = {34,35,36,37,38,39,40,41};
 // Ultrassonic Pins {trig, echo, trig, echo, trig, echo, trig, echo}
 uint8_t ultraPins[8] = {42,43,44,45,46,47,48,49}
 // Grouped Stepper Motor pins {step pin, direction pin}, enable pin

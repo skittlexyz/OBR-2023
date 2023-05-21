@@ -14,12 +14,12 @@
 /* Pin declaration section */
 // IR Sensor pins
 uint8_t irSensorPins[8] = {34,35,36,37,38,39,40,41};
-// Ultrassonic Pins {trig, echo, trig, echo, trig, echo, trig, echo}
-uint8_t ultraPins[8] = {42,43,44,45,46,47,48,49}
-// Grouped Stepper Motor pins {step pin, direction pin}, enable pin
+// Ultrassonic Pins {trig, echo, ...}
+uint8_t ultraPins[8] = {42,43,44,45,46,47,48,49};
+// Grouped Stepper Motor pins {step pin, direction pin, ..., enable pin}
 uint8_t stepperPins[5] = {2,5,3,6,8};
-// TCS34725 Pins {sda, scl, sda, scl}
-uint8_t colorPins[4] = {50, 51, 52, 53};
+// TCS34725 Pins {sda, scl, ...}
+uint8_t colorPins[4] = {50,51,52,53};
 
 /* Objects declaration*/
 // OLED 128x64
@@ -31,15 +31,17 @@ Adafruit_TCS34725softi2c rightColor = Adafruit_TCS34725softi2c(colorVelocity, TC
 /* Function declaration section */
 // IR Sensor Reader receives the mode (0: Digital, 1: Analog) and the sensor pin
 int irSensorRead(int mode, int pin);
+// Ultrassonic Sensor Reader receives the trigger and the echo pin
+float ultraSensorRead(int trigPin, int echoPin);
 // Color Sensor Reader receives the side to be read (0: Left, 1: Right) and the color to be read (0: Red, 1: Green, 2: Blue, 3: Clarity)
 int colorSensorRead(int side, int color);
 // Stepper Controller receiver if the movement will be in a cross axis, the delay between the steps, the step quantity, the direction (0, 1, 2, 3) if the cross is true and the angle if it isn't
 bool stepperControl(bool cross, int velocity, int steps, int direction, int angle);
 // Servo Controller receives which servo to control and the movement method
 bool servoControl(int current, char method);
-// Prints all the important info
+// Prints all the important info in serial monitor
 void infoPrint();
-// Display Controller receives the mode (0: Startup, 1: Console, 2: Errors, 3: Logo, 4: Clear), the text if needed, the line to print it and the delay size between the buffers
+// Display Controller receives the mode (0: , 1: , 2: , 3: , 4: Clear), the text if needed, the line to print it and the delay size between the buffers
 bool displayControl(int mode, String text, int line, int delayTime);
 // Try the function
 bool tryFunction(bool current, String name, String error);
@@ -61,10 +63,6 @@ void setup() {
   infoPrint();
 }
 void loop() {
-  stepperControl(true, stepperVelocity, 5000, 0, 0);
-  delay(250);
-  stepperControl(true, stepperVelocity, 5000, 1, 0);
-  delay(250);
 }
 
 /* Functions section */
@@ -74,6 +72,14 @@ int irSensorRead(int mode, int pin) {
   } else if (mode == 1) {
     return analogRead(pin);
   }
+}
+float ultraSensorRead(int trigPin, int echoPin) {
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+  return pulseIn(echoPin, HIGH) * 0.034 / 2;
 }
 int colorSensorRead(int side, int color) {
   uint16_t r, g, b, c;
@@ -170,35 +176,25 @@ bool servoControl(int current, char method) {
   return true;
 }
 void infoPrint() {
-  Serial.print("Código OBR 2023 - Nióbio\n");
-  Serial.print("├ Pinos:\n");
-  Serial.print("│ ├ IR: ");
-  for (int i = 0; i < sizeof(irSensorPins) - 1; i++) {
-  Serial.print(irSensorPins[i] );
-    Serial.print(", ");
+  Serial.print("IR Pins: ");
+  for (int i = 0; i < sizeof(irSensorPins); i++) {
+    Serial.print(irSensorPins[i] );
+    Serial.print(" ");
   }
-  Serial.print(irSensorPins[sizeof(irSensorPins) - 1]);
-  Serial.print("\n│ └ Stepper: ");
+  Serial.print("\nStepper Pins: ");
   for (int i = 0; i < sizeof(stepperPins) - 1; i++) {
     Serial.print(stepperPins[i]);
-    Serial.print(", ");
+    Serial.print(" ");
   }
-  Serial.print(stepperPins[sizeof(stepperPins) - 1]);
-  Serial.print("\n└ Constantes:\n");
-  Serial.print("  └ Velocidade: ");
+  Serial.print("\nStepper Velocity: ");
   Serial.print(stepperVelocity, DEC);
   Serial.println("\n");
 }
 bool displayControl(int mode, String text, int line, int delayTime) {
   switch (mode) {
-  case 0: // Startup
+  case 0:
     display.clearBuffer();
-    display.setFont(u8g2_font_helvB08_tf);
-    display.drawStr(0, 12, "OBR 2023");
-    display.drawStr(0, 24, "- Constantes:");
-    display.drawStr(0, 36, "  - Velocidade: ");
-    display.setCursor(78, 36);
-    display.print(stepperVelocity);
+    
     display.sendBuffer();
     delay(delayTime);
     break;
@@ -220,7 +216,7 @@ bool displayControl(int mode, String text, int line, int delayTime) {
     display.sendBuffer();
     delay(delayTime);
     break;
-  case 4:
+  case 4: // Clear
     delay(delayTime);
     display.clearBuffer();
     display.nextPage();
@@ -243,6 +239,10 @@ bool pinsSetup() {
   pinMode(stepperPins[sizeof(stepperPins) - 1], OUTPUT);
   for (int i = 0; i < sizeof(irSensorPins); i++) {
     pinMode(irSensorPins[i], INPUT);
+  }
+  for (int i = 0; i < 8; i += 2) {
+    pinMode(ultraPins[i], OUTPUT);
+    pinMode(ultraPins[i + 1], INPUT);
   }
   return true;
 }

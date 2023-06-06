@@ -18,7 +18,7 @@
 // IR Sensor pins
 uint8_t irSensorPins[8] = {34,35,36,37,38,39,40,41};
 // Ultrassonic Pins {trig, echo, ...}
-uint8_t ultraPins[8] = {42,43,44,45,46,47,48,49};
+uint8_t ultraPins[8] = {42,43,44,45,46,47,48,49}; 
 // Grouped Stepper Motor pins {step pin, direction pin, ..., enable pin}
 uint8_t stepperPins[5] = {2,5,3,6,8};
 // TCS34725 Pins {sda, scl, ...}
@@ -50,7 +50,7 @@ int irSensorRead(int pin);
 float ultraSensorRead(int trigPin, int echoPin);
 // Color Sensor Reader receives the side to be read (0: Left, 1: Right) and the color to be read (0: Red, 1: Green, 2: Blue, 3: Clarity)
 int colorSensorRead(int side, int color);
-// MPU6050 Sensor Reader receives the axis to return (1: x, 2: y, 3: z)
+// MPU6050 Sensor Reader receives the axis to return (0: x, 1: y, 2: z)
 float mpuSensorRead(int axis);
 // Stepper Controller receiver if the movement will be in a cross axis, the delay between the steps, the step quantity, the direction (0, 1, 2, 3) if the cross is true and the angle if it isn't
 bool stepperControl(bool cross, int velocity, int steps, int direction, int angle);
@@ -87,17 +87,54 @@ void setup() {
   if (oledDisplay) {
     tryFunction(oledSetup(), "oledSetup()", "OLED 128x64 Malfunction");
   }
-  //tryFunction(colorSetup(), "colorSetup()", "TCS34725 Malfunction");
-  //tryFunction(mpuSetup(), "mpuSetup()", "MPU6050 Malfunction");
+  tryFunction(colorSetup(), "colorSetup()", "TCS34725 Malfunction");
+  tryFunction(mpuSetup(), "mpuSetup()", "MPU6050 Malfunction");
   infoPrint();
 }
 void loop() {
-  for (int i = 0; i < sizeof(irSensorPins); i++){
+  Serial.print("\n");
+  Serial.print("IR | ");
+  for (int i = 0; i < sizeof(irSensorPins); i++) {
     Serial.print(i);
     Serial.print(": ");
-    Serial.println(irSensorRead(irSensorPins[i]));
+    Serial.print(irSensorRead(irSensorPins[i]));
+    Serial.print(" | ");
   }
-  delay(50);
+
+  Serial.print("\n");
+  Serial.print("COLOR | ");
+  for (int i = 0; i < sizeof(colorPins) / 2; i++) {
+    Serial.print(i);
+    Serial.print(": R: ");
+    Serial.print(colorSensorRead(i, 0));
+    Serial.print(" G: ");
+    Serial.print(colorSensorRead(i, 1));
+    Serial.print(" B: ");
+    Serial.print(colorSensorRead(i, 2));
+    Serial.print(" | ");
+  }
+
+  Serial.print("\n");
+  Serial.print("ULTRA | ");
+  for (int i = 0; i < sizeof(ultraPins); i+=2) {
+    Serial.print(i);
+    Serial.print(": ");
+    Serial.print(ultraSensorRead(ultraPins[i], ultraPins[i+1]));
+    Serial.print(" | ");
+  }
+  
+  Serial.print("\n");
+  Serial.print("GYRO | ");
+  for (int i = 0; i < 3; i++)
+  {
+    Serial.print(i);
+    Serial.print(": ");
+    Serial.print(mpuSensorRead(i));
+    Serial.print(" | ");
+  }
+  
+  
+  delay(5000);
 }
 
 /* Functions section */
@@ -131,7 +168,7 @@ int colorSensorRead(int side, int color) {
       return c;
       break;
     }
-    break;
+    break;  
   case 1:
     rightColor.getRawData(&r, &g, &b, &c);
     switch (color) {
@@ -157,13 +194,13 @@ float mpuSensorRead(int axis) {
     mpu.dmpGetQuaternion(&q, fifoBuffer);
     switch (axis)
     {
-    case 1:
+    case 0:
       return q.x;
       break;
-    case 2:
+    case 1:
       return q.y;
       break;
-    case 3:
+    case 2:
       return q.z;
       break;
     }

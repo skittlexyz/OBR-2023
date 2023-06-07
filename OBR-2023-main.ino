@@ -3,16 +3,14 @@
 /* Libraries section */
 #include <U8g2lib.h>
 #include "Adafruit_TCS34725softi2c.h"
-#include <Wire.h>
+#include <MPU6050_light.h>
 #include "I2Cdev.h"
-#include "MPU6050_6Axis_MotionApps20.h"
+#include "Wire.h"
 
 /* General configurations section */
 // Delay between each stepper step
 #define stepperVelocity 1
-#define oledDisplay true
 #define colorVelocity TCS34725_INTEGRATIONTIME_50MS
-#define INTERRUPT_PIN 2 
 
 /* Pin declaration and variables section */
 // IR Sensor pins
@@ -23,25 +21,13 @@ uint8_t ultraPins[8] = {42,43,44,45,46,47,48,49};
 uint8_t stepperPins[5] = {2,5,3,6,8};
 // TCS34725 Pins {sda, scl, ...}
 uint8_t colorPins[4] = {50,51,52,53};
-// MPU6050 Ambient Variables
-bool dmpReady = false;
-uint8_t mpuIntStatus;
-uint8_t devStatus;
-uint16_t packetSize;
-uint16_t fifoCount;
-uint8_t fifoBuffer[64];
-Quaternion q;
-uint8_t teapotPacket[14] = { '$', 0x02, 0,0, 0,0, 0,0, 0,0, 0x00, 0x00, '\r', '\n' };
-volatile bool mpuInterrupt = false;
 
 /* Objects declaration*/
-// OLED 128x64
-U8G2_SSD1306_128X64_NONAME_F_HW_I2C display(U8G2_R0, U8X8_PIN_NONE);
 // TCS34725
 Adafruit_TCS34725softi2c leftColor = Adafruit_TCS34725softi2c(colorVelocity, TCS34725_GAIN_1X, colorPins[0], colorPins[1]);
 Adafruit_TCS34725softi2c rightColor = Adafruit_TCS34725softi2c(colorVelocity, TCS34725_GAIN_1X, colorPins[2], colorPins[3]);
 // MPU6050
-MPU6050 mpu;
+MPU6050 mpu(Wire);
 
 /* Function declaration section */
 // IR Sensor Reader receives the sensor pin
@@ -58,38 +44,23 @@ bool stepperControl(bool cross, int velocity, int steps, int direction, int angl
 bool servoControl(int current, char method);
 // Prints all the important info in serial monitor
 void infoPrint();
-// Display Controller receives the mode (0: , 1: , 2: , 3: , 4: Clear), the text if needed, the line to print it and the delay size between the buffers
-bool displayControl(int mode, String text, int line, int delayTime);
 // Try the function
 bool tryFunction(bool current, String name, String error);
 // Pins configuration setup
 bool pinsSetup();
-// OLED 128x64 setup
-bool oledSetup();
 // TCS34725 setup
 bool colorSetup();
 // MPU6050 setup
 bool mpuSetup();
-// MPU6050 Ambient Test
-void dmpDataReady() { mpuInterrupt = true; }
 
 /* Main code section */
 void setup() {
-  #if I2CDEV_IMPLEMENTATION == I2CDEV_ARDUINO_WIRE
-    Wire.begin();
-    Wire.setClock(400000);
-  #elif I2CDEV_IMPLEMENTATION == I2CDEV_BUILTIN_FASTWIRE
-    Fastwire::setup(400, true);
-  #endif
+  Wire.begin();
   Serial.begin(115200);
-  while (!Serial);
+  infoPrint();
   tryFunction(pinsSetup(), "pinsSetup()", "Pins setup Error");
-  if (oledDisplay) {
-    tryFunction(oledSetup(), "oledSetup()", "OLED 128x64 Malfunction");
-  }
   tryFunction(colorSetup(), "colorSetup()", "TCS34725 Malfunction");
   tryFunction(mpuSetup(), "mpuSetup()", "MPU6050 Malfunction");
-  infoPrint();
 }
 void loop() {
   Serial.print("\n");
@@ -133,8 +104,7 @@ void loop() {
     Serial.print(" | ");
   }
   
-  
-  delay(5000);
+  delay(2500);
 }
 
 /* Functions section */
@@ -189,21 +159,18 @@ int colorSensorRead(int side, int color) {
   }
 }
 float mpuSensorRead(int axis) {
-  if (!dmpReady) return;
-  if (mpu.dmpGetCurrentFIFOPacket(fifoBuffer)) {
-    mpu.dmpGetQuaternion(&q, fifoBuffer);
-    switch (axis)
-    {
-    case 0:
-      return q.x;
-      break;
-    case 1:
-      return q.y;
-      break;
-    case 2:
-      return q.z;
-      break;
-    }
+  mpu.update();
+  switch (axis)
+  {
+  case 0:
+    return mpu.getAngleX();
+    break;
+  case 1:
+    return mpu.getAngleY();
+    break;
+  case 2:
+    return mpu.getAngleZ();
+    break;
   }
 }
 bool stepperControl(bool cross, int velocity, int steps, int direction, int angle) {
@@ -276,41 +243,6 @@ void infoPrint() {
   Serial.print(stepperVelocity, DEC);
   Serial.println("\n");
 }
-bool displayControl(int mode, String text, int line, int delayTime) {
-  switch (mode) {
-  case 0:
-    display.clearBuffer();
-    
-    display.sendBuffer();
-    delay(delayTime);
-    break;
-  case 1:
-    display.clearBuffer();
-
-    display.sendBuffer();
-    delay(delayTime);
-    break;
-  case 2:
-    display.clearBuffer();
-
-    display.sendBuffer();
-    delay(delayTime);
-    break;
-  case 3:
-    display.clearBuffer();
-
-    display.sendBuffer();
-    delay(delayTime);
-    break;
-  case 4: // Clear
-    delay(delayTime);
-    display.clearBuffer();
-    display.nextPage();
-    display.sendBuffer();
-    break;
-  }
-  return true;
-}
 bool tryFunction(bool current, String name, String error) {
   while (!current) {
     Serial.println(name + " - " + error + "!");
@@ -332,11 +264,6 @@ bool pinsSetup() {
   }
   return true;
 }
-bool oledSetup() {
-  display.begin();
-  display.clearBuffer();
-  return true;
-}
 bool colorSetup() {
   if (leftColor.begin() && rightColor.begin()) {
     return true;
@@ -345,27 +272,13 @@ bool colorSetup() {
   }
 }
 bool mpuSetup() {
-  pinMode(INTERRUPT_PIN, INPUT);
-  mpu.testConnection();devStatus = mpu.dmpInitialize();
-  mpu.setXGyroOffset(220);
-  mpu.setYGyroOffset(76);
-  mpu.setZGyroOffset(-85);
-  mpu.setZAccelOffset(1788); 
-  if (devStatus == 0) {
-    mpu.CalibrateAccel(6);
-    mpu.CalibrateGyro(6);
-    mpu.PrintActiveOffsets();
-    mpu.setDMPEnabled(true);
-    attachInterrupt(digitalPinToInterrupt(INTERRUPT_PIN), dmpDataReady, RISING);
-    mpuIntStatus = mpu.getIntStatus();
-    dmpReady = true;
-    packetSize = mpu.dmpGetFIFOPacketSize();
-    return true;
-  } else {
-    Serial.print(F("DMP Initialization failed (code "));
-    Serial.print(devStatus);
-    Serial.println(F(")"));
+  byte status = mpu.begin();
+  delay(50);
+  if (status != 0) {
     return false;
+  } else {
+    mpu.calcOffsets();
+    return true;
   }
-  return false;
+  
 }

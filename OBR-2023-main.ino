@@ -1,7 +1,6 @@
 /* Código OBR 2023 - Nióbio */
 
 /* Libraries section */
-#include <U8g2lib.h>
 #include "Adafruit_TCS34725softi2c.h"
 #include <MPU6050_light.h>
 #include "I2Cdev.h"

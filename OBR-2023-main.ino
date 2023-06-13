@@ -1,6 +1,7 @@
 /* Código OBR 2023 - Nióbio */
 
 /* Libraries section */
+#include <U8g2lib.h>
 #include "Adafruit_TCS34725softi2c.h"
 #include <MPU6050_light.h>
 #include "I2Cdev.h"
@@ -8,7 +9,9 @@
 
 /* General configurations section */
 // Delay between each stepper step
-#define stepperVelocity 1
+int stepperVelocity = 2; // ms/step
+int slowedStepperVelocity = 5;
+int stepperVelocityBackup = stepperVelocity;
 #define colorVelocity TCS34725_INTEGRATIONTIME_50MS
 
 /* Pin declaration and variables section */
@@ -30,19 +33,17 @@ MPU6050 mpu(Wire);
 
 /* Function declaration section */
 // IR Sensor Reader receives the sensor pin
-int irSensorRead(int pin);
+bool irSensorRead(int pin);
+// IR Sensor Reader from index to index, returns true if all the sensors are in black
+bool arrayIrRead(int minorIndex, int majorIndex);
 // Ultrassonic Sensor Reader receives the trigger and the echo pin
 float ultraSensorRead(int trigPin, int echoPin);
 // Color Sensor Reader receives the side to be read (0: Left, 1: Right) and the color to be read (0: Red, 1: Green, 2: Blue, 3: Clarity)
 int colorSensorRead(int side, int color);
 // MPU6050 Sensor Reader receives the axis to return (0: x, 1: y, 2: z)
 float mpuSensorRead(int axis);
-// Stepper Controller receiver if the movement will be in a cross axis, the delay between the steps, the step quantity, the direction (0, 1, 2, 3) if the cross is true and the angle if it isn't
-bool stepperControl(bool cross, int velocity, int steps, int direction, int angle);
-// Servo Controller receives which servo to control and the movement method
-bool servoControl(int current, char method);
-// Prints all the important info in serial monitor
-void infoPrint();
+// Stepper Controller receiver if the movement will be in a cross axis, the delay between the steps, the step quantity, the direction (Left: 0, Right: 1, Forward: 2, Backward: 3) if the cross is true and the angle if it isn't
+bool stepperControl(int velocity, int steps, int direction);
 // Try the function
 bool tryFunction(bool current, String name, String error);
 // Pins configuration setup
@@ -56,59 +57,77 @@ bool mpuSetup();
 void setup() {
   Wire.begin();
   Serial.begin(115200);
-  infoPrint();
   tryFunction(pinsSetup(), "pinsSetup()", "Pins setup Error");
   tryFunction(colorSetup(), "colorSetup()", "TCS34725 Malfunction");
-  tryFunction(mpuSetup(), "mpuSetup()", "MPU6050 Malfunction");
+  //tryFunction(mpuSetup(), "mpuSetup()", "MPU6050 Malfunction");
 }
-void loop() {
-  Serial.print("\n");
-  Serial.print("IR | ");
+void loop() {/*
+  Serial.print("\nInfrared | ");
   for (int i = 0; i < sizeof(irSensorPins); i++) {
-    Serial.print(i);
-    Serial.print(": ");
-    Serial.print(irSensorRead(irSensorPins[i]));
-    Serial.print(" | ");
+    Serial.print(i);Serial.print(": ");Serial.print(irSensorRead(irSensorPins[i]));Serial.print(" | ");
   }
-
-  Serial.print("\n");
-  Serial.print("COLOR | ");
+  Serial.print("\nColor | ");
   for (int i = 0; i < sizeof(colorPins) / 2; i++) {
-    Serial.print(i);
-    Serial.print(": R: ");
-    Serial.print(colorSensorRead(i, 0));
-    Serial.print(" G: ");
-    Serial.print(colorSensorRead(i, 1));
-    Serial.print(" B: ");
-    Serial.print(colorSensorRead(i, 2));
-    Serial.print(" | ");
+    Serial.print(i);Serial.print(": R: ");Serial.print(colorSensorRead(i, 0));Serial.print(" G: ");Serial.print(colorSensorRead(i, 1));Serial.print(" B: ");Serial.print(colorSensorRead(i, 2));Serial.print(" | ");
   }
-
-  Serial.print("\n");
-  Serial.print("ULTRA | ");
-  for (int i = 0; i < sizeof(ultraPins); i+=2) {
-    Serial.print(i);
-    Serial.print(": ");
-    Serial.print(ultraSensorRead(ultraPins[i], ultraPins[i+1]));
-    Serial.print(" | ");
-  }
-  
-  Serial.print("\n");
-  Serial.print("GYRO | ");
-  for (int i = 0; i < 3; i++)
+  Serial.print("\n");*/
+  for (int i = 0; i < sizeof(irSensorPins); i++)
   {
-    Serial.print(i);
-    Serial.print(": ");
-    Serial.print(mpuSensorRead(i));
-    Serial.print(" | ");
+    Serial.print(irSensorRead(irSensorPins[i]));
+    Serial.print(" ");
+  }
+  Serial.print("\n");
+  
+
+  if /* FORWARD */((irSensorRead(irSensorPins[4]) || irSensorRead(irSensorPins[3])) && !arrayIrRead(5, 7) && !arrayIrRead(0, 2)) {
+      Serial.print("\nForward ");
+      stepperControl(stepperVelocity, 10, 2);
+  } else if /* GAP */((!irSensorRead(irSensorPins[4]) && !irSensorRead(irSensorPins[3])) && !arrayIrRead(5, 6) && !arrayIrRead(1, 2)) {
+    Serial.print("\nForward Gap ");
+    stepperControl(stepperVelocity, 10, 2);
+  } else if /* SMOOTH LEFT */(((irSensorRead(irSensorPins[4]) || irSensorRead(irSensorPins[3])) && arrayIrRead(5, 6) && !arrayIrRead(1, 2)) || (arrayIrRead(5, 6) && !arrayIrRead(1, 2))) { 
+    stepperVelocity = slowedStepperVelocity;
+    stepperControl(stepperVelocity, 5, 1);
+    Serial.print("\nSmooth Left ");
+    stepperVelocity = stepperVelocityBackup;
+  } else if /* SMOOTH RIGHT */(((irSensorRead(irSensorPins[4]) || irSensorRead(irSensorPins[3])) && !arrayIrRead(5, 6) && arrayIrRead(1, 2)) || (arrayIrRead(5, 6) && !arrayIrRead(1, 2))) {
+    stepperVelocity = slowedStepperVelocity;
+    stepperControl(stepperVelocity, 5, 0);
+    Serial.print("\nSmooth Right ");
+    stepperVelocity = stepperVelocityBackup;
+  } else if /* LEFT */((arrayIrRead(2,7) && !irSensorRead(irSensorPins[0])) || arrayIrRead(4,7)) {
+    stepperVelocity = slowedStepperVelocity;
+    stepperControl(stepperVelocity, 5, 1);
+    Serial.print("\nLeft ");
+    stepperVelocity = stepperVelocityBackup;
+  } else if /* RIGHT */((arrayIrRead(0,5) && !irSensorRead(irSensorPins[7])) || arrayIrRead(0,3)) {
+    stepperVelocity = slowedStepperVelocity;
+    stepperControl(stepperVelocity, 5, 1);
+    Serial.print("\nLeft ");
+    stepperVelocity = stepperVelocityBackup;
   }
   
-  delay(2500);
+  //stepperControl(stepperVelocity, 100, 0);
+  //delay(150);
+  /*
+  * stepperControl(stepperVelocity, 250, 0);
+  * stepperControl(stepperVelocity, 250, 1);
+  * stepperControl(stepperVelocity, 250, 2);
+  * stepperControl(stepperVelocity, 250, 3);
+  */
 }
 
 /* Functions section */
-int irSensorRead(int pin) {
+bool irSensorRead(int pin) {
   return digitalRead(pin);
+}
+bool arrayIrRead(int minorIndex, int majorIndex) {
+  for (int i = minorIndex; i <= majorIndex; i++) {
+    if (!irSensorRead(irSensorPins[i])) {
+      return false;
+    }
+  }
+  return true;
 }
 float ultraSensorRead(int trigPin, int echoPin) {
   digitalWrite(trigPin, LOW);
@@ -172,75 +191,40 @@ float mpuSensorRead(int axis) {
     break;
   }
 }
-bool stepperControl(bool cross, int velocity, int steps, int direction, int angle) {
-  if (cross) {
-    for (int i = 0; i < steps; i++) {
-      switch (direction) {
+bool stepperControl(int velocity, int steps, int direction) {
+  for (int i = 0; i < steps; i++) {
+    switch (direction) {
       case 0:
-        digitalWrite(stepperPins[1], HIGH);
-        digitalWrite(stepperPins[3], LOW);
-        digitalWrite(stepperPins[0], HIGH);
-        digitalWrite(stepperPins[2], HIGH);
+        digitalWrite(stepperPins[1], HIGH);digitalWrite(stepperPins[3], HIGH);
+        digitalWrite(stepperPins[0], HIGH);digitalWrite(stepperPins[2], HIGH);
         delay(velocity);
-        digitalWrite(stepperPins[0], LOW);
-        digitalWrite(stepperPins[2], LOW);
+        digitalWrite(stepperPins[0], LOW);digitalWrite(stepperPins[2], LOW);
         delay(velocity);      
         break;
       case 1:
-        digitalWrite(stepperPins[1], LOW);
-        digitalWrite(stepperPins[3], HIGH);
-        digitalWrite(stepperPins[0], HIGH);
-        digitalWrite(stepperPins[2], HIGH);
+        digitalWrite(stepperPins[1], LOW);digitalWrite(stepperPins[3], LOW);
+        digitalWrite(stepperPins[0], HIGH);digitalWrite(stepperPins[2], HIGH);
         delay(velocity);
-        digitalWrite(stepperPins[0], LOW);
-        digitalWrite(stepperPins[2], LOW);
+        digitalWrite(stepperPins[0], LOW);digitalWrite(stepperPins[2], LOW);
         delay(velocity);      
         break;
       case 2:
-        digitalWrite(stepperPins[1], HIGH);
-        digitalWrite(stepperPins[3], HIGH);
-        digitalWrite(stepperPins[0], HIGH);
-        digitalWrite(stepperPins[2], HIGH);
+        digitalWrite(stepperPins[1], HIGH);digitalWrite(stepperPins[3], LOW);
+        digitalWrite(stepperPins[0], HIGH);digitalWrite(stepperPins[2], HIGH);
         delay(velocity);
-        digitalWrite(stepperPins[0], LOW);
-        digitalWrite(stepperPins[2], LOW);
+        digitalWrite(stepperPins[0], LOW);digitalWrite(stepperPins[2], LOW);
         delay(velocity);      
         break;
       case 3:
-        digitalWrite(stepperPins[1], LOW);
-        digitalWrite(stepperPins[3], LOW);
-        digitalWrite(stepperPins[0], HIGH);
-        digitalWrite(stepperPins[2], HIGH);
+        digitalWrite(stepperPins[1], LOW);digitalWrite(stepperPins[3], HIGH);
+        digitalWrite(stepperPins[0], HIGH);digitalWrite(stepperPins[2], HIGH);
         delay(velocity);
-        digitalWrite(stepperPins[0], LOW);
-        digitalWrite(stepperPins[2], LOW);
+        digitalWrite(stepperPins[0], LOW);digitalWrite(stepperPins[2], LOW);
         delay(velocity);      
         break;
-      }
     }
-    return true;
-  } else {
-    return true;
   }
-  return false;
-}
-bool servoControl(int current, char method) {
   return true;
-}
-void infoPrint() {
-  Serial.print("IR Pins: ");
-  for (int i = 0; i < sizeof(irSensorPins); i++) {
-    Serial.print(irSensorPins[i] );
-    Serial.print(" ");
-  }
-  Serial.print("\nStepper Pins: ");
-  for (int i = 0; i < sizeof(stepperPins) - 1; i++) {
-    Serial.print(stepperPins[i]);
-    Serial.print(" ");
-  }
-  Serial.print("\nStepper Velocity: ");
-  Serial.print(stepperVelocity, DEC);
-  Serial.println("\n");
 }
 bool tryFunction(bool current, String name, String error) {
   while (!current) {
@@ -279,5 +263,4 @@ bool mpuSetup() {
     mpu.calcOffsets();
     return true;
   }
-  
 }

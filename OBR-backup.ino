@@ -8,9 +8,10 @@
 #include "Wire.h"
 
 /* General configurations section */
+// Delay between each stepper step
 int stepperVelocity = 2; // ms/step
 int slowedStepperVelocity = 5;
-int primarySteps = 20;
+int primarySteps = 10;
 int secundarySteps = 5;
 #define colorVelocity TCS34725_INTEGRATIONTIME_50MS
 
@@ -35,11 +36,7 @@ MPU6050 mpu(Wire);
 // IR Sensor Reader receives the sensor pin
 bool irSensorRead(int pin);
 // IR Sensor Reader from index to index, returns true if all the sensors are in black
-bool positiveArrayIrRead(int minorIndex, int majorIndex);
-// IR Sensor Reader from index to index, returns true if all the sensors are in white
-bool negativeArrayIrRead(int minorIndex, int majorIndex);
-// IR Sensor Reader from index to index, returns true if some of the sensors are in black
-bool someArrayIrRead(int minorIndex, int majorIndex);
+bool arrayIrRead(int minorIndex, int majorIndex);
 // Ultrassonic Sensor Reader receives the trigger and the echo pin
 float ultraSensorRead(int trigPin, int echoPin);
 // Color Sensor Reader receives the side to be read (0: Left, 1: Right) and the color to be read (0: Red, 1: Green, 2: Blue, 3: Clarity)
@@ -49,7 +46,7 @@ float mpuSensorRead(int axis);
 // Stepper Controller receiver if the movement will be in a cross axis, the delay between the steps, the step quantity, the direction (Left: 0, Right: 1, Forward: 2, Backward: 3) if the cross is true and the angle if it isn't
 bool stepperControl(int velocity, int steps, int direction);
 // Check a T case
-bool checkTCase(bool back);
+bool checkTCase();
 // Straight Turn receives the side to make a turn
 void straightTurn(int side);
 // Try the function
@@ -70,81 +67,81 @@ void setup() {
   //tryFunction(mpuSetup(), "mpuSetup()", "MPU6050 Malfunction");
 }
 void loop() {
-
-  for (int i = sizeof(irSensorPins) - 1; i >= 0; i--) { Serial.print(irSensorRead(irSensorPins[i]));Serial.print(" "); }
-  Serial.print("\n");Serial.print(greenCheck(0));Serial.print(greenCheck(1));
-  
-  if /* 1 */(positiveArrayIrRead(0,7)) {
-    if /* DG */(greenCheck(0) && greenCheck(1)) {
-      Serial.println("aikshdj");
-      stepperControl(slowedStepperVelocity, primarySteps * 100, 0);
-    } else if /* LG */(greenCheck(0)) {
-      stepperControl(slowedStepperVelocity, primarySteps * 10, 0);
-      stepperControl(stepperVelocity, primarySteps * 4, 2);
-    } else if /* RG */(greenCheck(1)) {
-      stepperControl(slowedStepperVelocity, primarySteps * 10, 1);
-      stepperControl(stepperVelocity, primarySteps * 4, 2);
-    } else if /* NG */(!greenCheck(0) && !greenCheck(1)) {
-      stepperControl(stepperVelocity, primarySteps * 4, 2);
-    }
-    Serial.print(" 1");
-  } else if /* 2L */(positiveArrayIrRead(3,7) && negativeArrayIrRead(0,1)) {
-    if /* LG */(greenCheck(0)) {
-      stepperControl(slowedStepperVelocity, primarySteps * 10, 0);
-      stepperControl(stepperVelocity, primarySteps * 4, 2);
-    } else if /* NG */(!greenCheck(0) && !greenCheck(1)) {
-      if(checkTCase(true)) {
-        stepperControl(stepperVelocity, primarySteps * 4, 2);
-      } else {
-        stepperControl(slowedStepperVelocity, primarySteps * 10, 0);
-        stepperControl(stepperVelocity, primarySteps * 4, 2);
-      }
-    }
-    Serial.print(" 2L");
-  } else if /* 2R */(positiveArrayIrRead(0,4) && negativeArrayIrRead(6,7)) {
-    if /* RG */(greenCheck(1)) {
-      stepperControl(slowedStepperVelocity, primarySteps * 10, 1);
-      stepperControl(stepperVelocity, primarySteps * 4, 2);
-    } else if /* NG */(!greenCheck(0) && !greenCheck(1)) {
-      if(checkTCase(true)) {
-        stepperControl(stepperVelocity, primarySteps * 4, 2);
-      } else {
-        stepperControl(slowedStepperVelocity, primarySteps * 10, 1);
-        stepperControl(stepperVelocity, primarySteps * 4, 2);
-      }
-    }
-    Serial.print(" 2R");
-  } else if /* 3L */(!positiveArrayIrRead(3,4) && !negativeArrayIrRead(5,7)) {
-    stepperControl(slowedStepperVelocity, primarySteps, 0);
-    Serial.print(" 3L");
-  } else if /* 3R */(!positiveArrayIrRead(3,4) && !negativeArrayIrRead(0,2)) {
-    stepperControl(slowedStepperVelocity, primarySteps , 1);
-    Serial.print(" 3R");
-  } else if /* 4 */(!negativeArrayIrRead(1,6) && !irSensorRead(irSensorPins[0]) && !irSensorRead(irSensorPins[7])) {
-    stepperControl(stepperVelocity, primarySteps, 2);
-    Serial.print(" 4");
-  } else if /* 5 */(negativeArrayIrRead(0,7)) {
-    stepperControl(stepperVelocity, primarySteps, 2);
-    Serial.print(" 5");
+  for (int i = sizeof(irSensorPins) - 1; i >= 0; i--) {
+    Serial.print(irSensorRead(irSensorPins[i]));Serial.print(" ");
   }
+  /*
+  Serial.print("\nColor | ");
+  Serial.print("1: R: ");
+  Serial.print(colorSensorRead(0, 0));
+  Serial.print(" G: ");
+  Serial.print(colorSensorRead(0, 1));
+  Serial.print(" B: ");
+  Serial.print(colorSensorRead(0, 2));
+  Serial.print(" | ");
+  Serial.print("2: R: ");
+  Serial.print(colorSensorRead(1, 0));
+  Serial.print(" G: ");
+  Serial.print(colorSensorRead(1, 1));
+  Serial.print(" B: ");
+  Serial.print(colorSensorRead(1, 2));
+  Serial.print(" | ");
   Serial.print("\n");
+  */
+
+  if /* FORWARD: OOO##OOO */((irSensorRead(irSensorPins[4]) || irSensorRead(irSensorPins[3])) && !irSensorRead(irSensorPins[0]) && !irSensorRead(irSensorPins[1]) && !irSensorRead(irSensorPins[2]) && !irSensorRead(irSensorPins[5]) && !irSensorRead(irSensorPins[6]) && !irSensorRead(irSensorPins[700
+  ])) {
+      if /* ALIGN LEFT: OO##OOOO / ###--OOO */((irSensorRead(irSensorPins[4]) && irSensorRead(irSensorPins[5])) || (arrayIrRead(5,7) && !arrayIrRead(0,2))) {
+        stepperControl(stepperVelocity, secundarySteps, 1);
+      } else if /* ALIGN RIGHT: OOOO##OO / OOO--### */((irSensorRead(irSensorPins[3]) && irSensorRead(irSensorPins[2])) || (arrayIrRead(0,2) && !arrayIrRead(5,7))) {
+        stepperControl(stepperVelocity, secundarySteps, 0);
+      }
+      stepperControl(stepperVelocity, primarySteps, 2);
+      Serial.print("\nForward ");
+  } else if /* GAP: OOOOOOOO*/(irSensorRead(irSensorPins[0]) && irSensorRead(irSensorPins[1]) && irSensorRead(irSensorPins[2]) && irSensorRead(irSensorPins[3]) && irSensorRead(irSensorPins[4]) && irSensorRead(irSensorPins[5]) && irSensorRead(irSensorPins[6]) && irSensorRead(irSensorPins[7])) {
+    Serial.print("\nForward Gap ");
+    stepperControl(stepperVelocity, primarySteps, 2);
+  } else if /* SMOOTH LEFT: -####OO- / -##--OO- */((!arrayIrRead(0,2) && arrayIrRead(5,6)) || (!arrayIrRead(0,2) && arrayIrRead(5,7))) { 
+    stepperControl(slowedStepperVelocity, secundarySteps, 1);
+    Serial.print("\nSmooth Left ");
+  } else if /* SMOOTH RIGHT -OO####- / -OO--##- */((!arrayIrRead(3,5) && arrayIrRead(1,2)) || (!arrayIrRead(3,5) && arrayIrRead(0,2))) {
+    stepperControl(slowedStepperVelocity, secundarySteps, 0);
+    Serial.print("\nSmooth Right ");
+  } else if /* LEFT: #####OOO */((irSensorRead(irSensorPins[3] || irSensorPins[4])) && arrayIrRead(2,0)) {
+    if /* FORWARD */(checkTCase()) {
+      stepperControl(stepperVelocity, primarySteps * 4, 2);
+      Serial.print("\nForward ");
+    } else /* LEFT */{
+      straightTurn(1);
+      Serial.print("\nLeft ");
+    }
+  } else if /* RIGHT: OOO##### */((irSensorRead(irSensorPins[3] || irSensorPins[4])) && arrayIrRead(5,7)) {
+    if /* FORWARD */(checkTCase()) {
+      stepperControl(stepperVelocity, primarySteps * 4, 2);
+      Serial.print("\nForward ");
+    } else /* RIGHT */{
+      straightTurn(0);
+      Serial.print("\nRight ");
+    }
+  }
 }
+
+
+// else if /* GREEN LEFT */(arrayIrRead(0,7) && greenCheck(0)) {
+//     straightTurn(1);
+//     Serial.print("\nGreen Left ");
+//   } else if /* GREEN RIGHT*/(arrayIrRead(0,7) && greenCheck(1)) {
+//     straightTurn(0);
+//     Serial.print("\nGreen Right ");
+//   } 
 
 /* Functions section */
 bool irSensorRead(int pin) {
   return digitalRead(pin);
 }
-bool positiveArrayIrRead(int minorIndex, int majorIndex) {
+bool arrayIrRead(int minorIndex, int majorIndex) {
   for (int i = minorIndex; i <= majorIndex; i++) {
     if (!irSensorRead(irSensorPins[i])) {
-      return false;
-    }
-  }
-  return true;
-}
-bool negativeArrayIrRead(int minorIndex, int majorIndex) {
-  for (int i = minorIndex; i <= majorIndex; i++) {
-    if (irSensorRead(irSensorPins[i])) {
       return false;
     }
   }
@@ -201,8 +198,10 @@ bool greenCheck(int side) {
   if (side == 0 && colorSensorRead(0,1) < 200 && colorSensorRead(0,1) > colorSensorRead(0,0) && colorSensorRead(0,1) > colorSensorRead(0,2)) {
     return true;
   }
-  if (side == 1 && colorSensorRead(1,1) < 200 && colorSensorRead(1,1) > colorSensorRead(1,0) && colorSensorRead(1,1) > colorSensorRead(1,2)) {
+  if (side == 1 && colorSensorRead(1,1) < 150 && colorSensorRead(1,1) > colorSensorRead(1,0) && colorSensorRead(1,1) > colorSensorRead(1,2)) {
     return true;
+  }
+  if (side == 2) {
   }
   return false;
 }
@@ -221,18 +220,18 @@ float mpuSensorRead(int axis) {
     break;
   }
 }
-bool stepperControl(int velocity, int steps, int direction) {  
+bool stepperControl(int velocity, int steps, int direction) {
   for (int i = 0; i < steps; i++) {
     switch (direction) {
-      case 0: // left
-        digitalWrite(stepperPins[1], LOW);digitalWrite(stepperPins[3], LOW);
+      case 0: // right
+        digitalWrite(stepperPins[1], HIGH);digitalWrite(stepperPins[3], HIGH);
         digitalWrite(stepperPins[0], HIGH);digitalWrite(stepperPins[2], HIGH);
         delay(velocity);
         digitalWrite(stepperPins[0], LOW);digitalWrite(stepperPins[2], LOW);
         delay(velocity);      
         break;
-      case 1: // right
-        digitalWrite(stepperPins[1], HIGH);digitalWrite(stepperPins[3], HIGH);
+      case 1: // left
+        digitalWrite(stepperPins[1], LOW);digitalWrite(stepperPins[3], LOW);
         digitalWrite(stepperPins[0], HIGH);digitalWrite(stepperPins[2], HIGH);
         delay(velocity);
         digitalWrite(stepperPins[0], LOW);digitalWrite(stepperPins[2], LOW);
@@ -256,24 +255,21 @@ bool stepperControl(int velocity, int steps, int direction) {
   }
   return true;
 }
-bool checkTCase(bool back) {
+bool checkTCase() {
   stepperControl(stepperVelocity, 100, 2);
-  if (!negativeArrayIrRead(2,5)) {
-      if (back) {
-      stepperControl(stepperVelocity, 100, 3);
-    }
+  if (irSensorRead(irSensorRead(irSensorPins[2]) || irSensorPins[3]) || irSensorRead(irSensorPins[4]) || irSensorRead(irSensorPins[5])) {
     return true;
-  }
-  if (back) {
+  } else {
     stepperControl(stepperVelocity, 100, 3);
+    return false;
   }
-  return false;
+   
 }
 void straightTurn(int side) {
   stepperControl(stepperVelocity, 100, 2);
   do {
     stepperControl(slowedStepperVelocity, secundarySteps * 4, side);
-  } while (!positiveArrayIrRead(3,4) && (!positiveArrayIrRead(0,2) || !positiveArrayIrRead(5,7)));
+  } while (!arrayIrRead(3,4) && (!arrayIrRead(0,2) || !arrayIrRead(5,7)));
   stepperControl(slowedStepperVelocity, secundarySteps * 2, side);
 }
 bool tryFunction(bool current, String name, String error) {

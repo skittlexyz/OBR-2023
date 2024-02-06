@@ -1,3 +1,3 @@
-# Repositório OBR - 2023 🤖💡
+# Repositório OBR - 2024 🤖💡
 
-> by: Moisés, João, Bianca, Malu, Digão e Fabs!
+> by: Moisés, Malu, Tomás, Leo, Digão e Fabs!
